@@ -1,0 +1,13 @@
+{
+  "ui": {
+    "fullscreen_borderless": true,
+    "show_session_timer": true
+  },
+  "translation": {
+    "provider": "gemini",
+    "transliteration": "off"
+  },
+  "api": {
+    "GEMINI_API_KEY": ""
+  }
+}
