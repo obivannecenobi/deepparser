@@ -1,0 +1,11 @@
+__pycache__/
+_patches/
+*.bat
+INSTALL_M3_1.bat
+README_assembled.md
+SETTINGS.json
+SETTINGS_SCHEMA.json
+run_dev.bat
+site_profiles.py
+utils_docx.py
+requirements.txt
