@@ -5,6 +5,9 @@ site_profiles.py — профили сайтов (M2.1, fixed)
 - MVLEmpyr
 - Novatls
 - Ellotl
+- Webnovel (минимальная поддержка)
+- Ranobelib
+- FanqieNovel
 """
 
 import re
@@ -206,8 +209,114 @@ class EllotlProfile(BaseProfile):
         body = text_from_nodes(soup, ["article","div.entry-content","div#chapter-content"])
         return ch_title, body
 
+# ---------- Webnovel ----------
+class WebnovelProfile(BaseProfile):
+    """Very basic support for webnovel.com"""
+    domains = ["webnovel.com", "www.webnovel.com"]
+
+    def parse_book(self, url: str) -> Tuple[str, List[Chapter]]:
+        r = get(url)
+        soup = BeautifulSoup(r.text, "lxml")
+        title_el = soup.select_one("h1, .j_bookName")
+        book_title = title_el.get_text(strip=True) if title_el else "Webnovel_Book"
+        chapters: List[Chapter] = []
+        for a in soup.select("a[href]"):
+            href = a.get("href")
+            if not href:
+                continue
+            if "/chapter/" in href or "chapter-" in href:
+                txt = a.get_text(strip=True)
+                if txt:
+                    chapters.append(Chapter(txt, urllib.parse.urljoin(url, href)))
+        uniq, seen = [], set()
+        for ch in chapters:
+            if ch.url not in seen:
+                uniq.append(ch)
+                seen.add(ch.url)
+        return book_title, uniq
+
+    def fetch_chapter(self, url: str) -> Tuple[str, str]:
+        r = get(url)
+        soup = BeautifulSoup(r.text, "lxml")
+        t = soup.select_one("h1, .j_chapterName, .cha-tit")
+        ch_title = t.get_text(strip=True) if t else "Chapter"
+        body = text_from_nodes(soup, ["div#chapter-content", "div.cha-words", "div#j_chapterBox"])
+        return ch_title, body
+
+# ---------- Ranobelib ----------
+class RanobelibProfile(BaseProfile):
+    domains = ["ranobelib.me", "www.ranobelib.me"]
+
+    def parse_book(self, url: str) -> Tuple[str, List[Chapter]]:
+        r = get(url)
+        soup = BeautifulSoup(r.text, "lxml")
+        title_el = soup.select_one("h1")
+        book_title = title_el.get_text(strip=True) if title_el else "Ranobelib_Book"
+        chapters: List[Chapter] = []
+        for a in soup.select("a[href*='chapter']"):
+            href = a.get("href")
+            if not href:
+                continue
+            txt = a.get_text(strip=True)
+            if txt:
+                chapters.append(Chapter(txt, urllib.parse.urljoin(url, href)))
+        uniq, seen = [], set()
+        for ch in chapters:
+            if ch.url not in seen:
+                uniq.append(ch)
+                seen.add(ch.url)
+        return book_title, uniq
+
+    def fetch_chapter(self, url: str) -> Tuple[str, str]:
+        r = get(url)
+        soup = BeautifulSoup(r.text, "lxml")
+        t = soup.select_one("h1")
+        ch_title = t.get_text(strip=True) if t else "Chapter"
+        body = text_from_nodes(soup, ["div.reader-container", "div#reader" ])
+        return ch_title, body
+
+# ---------- FanqieNovel ----------
+class FanqieNovelProfile(BaseProfile):
+    domains = ["fanqienovel.com", "www.fanqienovel.com"]
+
+    def parse_book(self, url: str) -> Tuple[str, List[Chapter]]:
+        r = get(url)
+        soup = BeautifulSoup(r.text, "lxml")
+        title_el = soup.select_one("h1")
+        book_title = title_el.get_text(strip=True) if title_el else "FanqieNovel_Book"
+        chapters: List[Chapter] = []
+        for a in soup.select("a[href*='/page/']"):
+            href = a.get("href")
+            if not href:
+                continue
+            txt = a.get_text(strip=True)
+            if txt:
+                chapters.append(Chapter(txt, urllib.parse.urljoin(url, href)))
+        uniq, seen = [], set()
+        for ch in chapters:
+            if ch.url not in seen:
+                uniq.append(ch)
+                seen.add(ch.url)
+        return book_title, uniq
+
+    def fetch_chapter(self, url: str) -> Tuple[str, str]:
+        r = get(url)
+        soup = BeautifulSoup(r.text, "lxml")
+        t = soup.select_one("h1")
+        ch_title = t.get_text(strip=True) if t else "Chapter"
+        body = text_from_nodes(soup, ["div#chapter-content", "div.novel-content"])
+        return ch_title, body
+
 # Registry
-PROFILES = [RoyalRoadProfile(), MVLEmpyrProfile(), NovatlsProfile(), EllotlProfile()]
+PROFILES = [
+    RoyalRoadProfile(),
+    MVLEmpyrProfile(),
+    NovatlsProfile(),
+    EllotlProfile(),
+    WebnovelProfile(),
+    RanobelibProfile(),
+    FanqieNovelProfile(),
+]
 
 def detect_profile(url: str) -> Optional[BaseProfile]:
     for p in PROFILES:
