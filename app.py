@@ -3,6 +3,7 @@ import sys
 from pathlib import Path
 from datetime import datetime
 from threading import Thread, Event
+import os
 
 from PySide6.QtCore import Qt, QSettings, Signal, QObject, QByteArray
 from PySide6.QtGui import QAction, QKeySequence
@@ -18,6 +19,7 @@ DEFAULT_ACCENT = "#00E5FF"
 
 from site_profiles import detect_profile
 from utils_docx import save_chapter_docx
+from translators import GeminiTranslator
 
 def ensure_dir(p: Path):
     p.mkdir(parents=True, exist_ok=True)
@@ -104,19 +106,21 @@ class ProjectPanel(QFrame):
             self.refresh()
 
 class ParserPanel(QFrame):
-    def __init__(self, on_parse, on_pause, on_stop):
+    def __init__(self, on_parse, on_pause, on_stop, on_translate):
         super().__init__()
         lay = QHBoxLayout(self); lay.setContentsMargins(8,8,8,8); lay.setSpacing(8)
         self.url = QLineEdit(); self.url.setPlaceholderText("Вставьте ссылку на книгу…")
         self.btn_parse = QPushButton("Спарсить")
         self.btn_pause = QPushButton("Пауза")
         self.btn_stop = QPushButton("Стоп")
+        self.btn_translate = QPushButton("Перевести")
         self.progress = QProgressBar(); self.progress.setMinimum(0); self.progress.setMaximum(100)
         self.btn_parse.clicked.connect(lambda: on_parse(self.url.text().strip()))
         self.btn_pause.clicked.connect(on_pause)
         self.btn_stop.clicked.connect(on_stop)
+        self.btn_translate.clicked.connect(on_translate)
         lay.addWidget(QLabel("Ссылка:")); lay.addWidget(self.url,1); lay.addWidget(self.btn_parse)
-        lay.addWidget(self.btn_pause); lay.addWidget(self.btn_stop); lay.addWidget(self.progress,1)
+        lay.addWidget(self.btn_pause); lay.addWidget(self.btn_stop); lay.addWidget(self.btn_translate); lay.addWidget(self.progress,1)
 
 class EditorArea(QFrame):
     def __init__(self):
@@ -127,8 +131,11 @@ class EditorArea(QFrame):
         self._pause.clear(); self._stop.clear()
         self.project_path: Path|None = None
 
+        api_key = os.getenv("GEMINI_API_KEY")
+        self.translator = GeminiTranslator(api_key) if api_key else None
+
         v = QVBoxLayout(self); v.setContentsMargins(8,8,8,8); v.setSpacing(8)
-        self.panel = ParserPanel(self._start_parse, self._toggle_pause, self._stop_parse)
+        self.panel = ParserPanel(self._start_parse, self._toggle_pause, self._stop_parse, self._translate_current)
         v.addWidget(self.panel)
 
         self.split = QSplitter(Qt.Vertical); v.addWidget(self.split,1)
@@ -190,6 +197,21 @@ class EditorArea(QFrame):
         self._stop.set()
         self._pause.clear()
         self.panel.btn_pause.setText("Пауза")
+
+    def _translate_current(self):
+        if not self.translator:
+            QMessageBox.warning(self, "Нет ключа", "Укажите переменную окружения GEMINI_API_KEY")
+            return
+        text = self.orig.toPlainText().strip()
+        if not text:
+            QMessageBox.information(self, "Нет текста", "Слева нет текста для перевода")
+            return
+        try:
+            prompt = self.prompt.toPlainText().strip()
+            result = self.translator.translate(text, prompt=prompt)
+            self.tran.setPlainText(result)
+        except Exception as e:
+            QMessageBox.critical(self, "Ошибка перевода", str(e))
 
     def _on_progress(self, p: int, msg: str):
         self.panel.progress.setValue(p); self.panel.progress.setFormat(msg+" (%p%)")
